@@ -79,24 +79,16 @@ pub fn start_server(
     Ok((port, handle))
 }
 
-pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
-    eprintln!("acting as debug adapter");
-    let mut dreamseeker_exe = None;
+/// Act as a debug server instead of a language server.
+#[derive(clap::Args, Debug)]
+pub struct DebuggerCli {
+    #[arg(long = "dreamseeker-exe")]
+    dreamseeker_exe: String,
+}
 
-    while let Some(arg) = args.next() {
-        if arg == "--dreamseeker-exe" {
-            dreamseeker_exe = Some(
-                args.next()
-                    .expect("must specify a value for --dreamseeker-exe"),
-            );
-        } else {
-            panic!("unknown argument {arg:?}");
-        }
-    }
-
-    let dreamseeker_exe =
-        dreamseeker_exe.expect("must provide argument `--dreamseeker-exe path/to/dreamseeker.exe`");
-    eprintln!("dreamseeker: {dreamseeker_exe}");
+pub fn debugger_main(args: &DebuggerCli) {
+    eprintln!("\nacting as debug adapter");
+    eprintln!("dreamseeker: {}", args.dreamseeker_exe);
 
     // This isn't the preferred way to run the DAP server so it's okay for it
     // to be kind of sloppy.
@@ -118,7 +110,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
     };
     let mut debugger = Debugger::new(
         ctx.config().debugger.engine,
-        dreamseeker_exe,
+        args.dreamseeker_exe.clone(),
         None,
         db,
         Box::new(std::io::stdout()),

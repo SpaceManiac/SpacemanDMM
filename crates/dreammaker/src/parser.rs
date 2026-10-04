@@ -635,7 +635,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             },
             Token![..] => {
                 // Handles unscoped `..()` in some old codebases.
-                DMError::new(start, "got `..`, expected identifier".to_string()).register(self.context);
+                DMError::new(start, "got `..`, expected identifier").register(self.context);
                 let i = ident!("..");
                 self.annotate(start, || Annotation::InSequence(idx));
                 success(i)

@@ -14,7 +14,7 @@ echo "Using tag name: $relname"
 touch crates/*/build.rs
 
 echo '==== Linux build ===='
-cargo build --release --target x86_64-unknown-linux-musl
+tools/manylinux/container cargo build --release --target x86_64-unknown-linux-gnu
 
 echo '==== Windows build ===='
 cargo build --release --target x86_64-pc-windows-gnu
@@ -26,7 +26,7 @@ DEST=target/dist
 rm -rf "$DEST"
 mkdir -p "$DEST"
 cp \
-    target/x86_64-unknown-linux-musl/release/{dreamchecker,dmdoc,dmm-tools,dm-langserver} \
+    target/x86_64-unknown-linux-gnu/release/{dreamchecker,dmdoc,dmm-tools,dm-langserver} \
     target/x86_64-pc-windows-gnu/release/{dreamchecker,dmdoc,dmm-tools,dm-langserver}.exe \
     "$DEST"
 echo "# SpacemanDMM $relname" | tee "$DEST/$relname.sha256"

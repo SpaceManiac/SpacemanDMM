@@ -22,6 +22,22 @@ extern crate regex;
 #[macro_use]
 extern crate lazy_static;
 
+use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+
+use clap::Parser;
+use dm::annotation::{Annotation, AnnotationTree};
+use dm::ast::Ident;
+use dm::objtree::TypeRef;
+use dm::{FileId, ident};
+use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use jsonrpc::{Call, Output, Response};
+use lsp_types::{notification::*, request::*, *};
+use url::Url;
+
 #[macro_use]
 mod macros;
 mod background;
@@ -35,20 +51,7 @@ mod find_references;
 mod jrpc_io;
 mod symbol_search;
 
-use crate::extras::{ExpandMacros, QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
-use dm::annotation::{Annotation, AnnotationTree};
-use dm::ast::Ident;
-use dm::objtree::TypeRef;
-use dm::{FileId, ident};
-use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
-use jsonrpc::{Call, Output, Response};
-use lsp_types::{notification::*, request::*, *};
-use std::collections::VecDeque;
-use std::collections::hash_map::Entry;
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
-use url::Url;
+use extras::{ExpandMacros, QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
 
 fn main() {
     // TODO: use [std::panic::set_backtrace_style] when stable: https://github.com/rust-lang/rust/issues/93346
@@ -57,56 +60,90 @@ fn main() {
         std::env::set_var("RUST_BACKTRACE", "1");
     }
 
-    eprintln!(
-        "dm-langserver {}  Copyright (C) 2017-2025  Tad Hardesty",
-        env!("CARGO_PKG_VERSION")
-    );
-    eprintln!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
-    eprintln!("and you are welcome to redistribute it under the conditions of the GNU");
-    eprintln!("General Public License version 3.");
-    eprintln!();
-    match std::env::current_exe() {
-        Ok(path) => eprintln!("executable: {}", path.display()),
-        Err(e) => eprintln!("exe check failure: {e}"),
-    }
-    eprint!(
-        "{}",
-        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
-    );
-    #[cfg(extools_bundle)]
-    {
-        eprintln!("extools commit: {}", env!("BUNDLE_VERSION_extools.dll"));
-    }
-    #[cfg(auxtools_bundle)]
-    {
-        eprintln!(
-            "auxtools commit: {}",
-            env!("BUNDLE_VERSION_debug_server.dll")
-        );
-    }
-    match std::env::current_dir() {
-        Ok(path) => eprintln!("directory: {}", path.display()),
-        Err(e) => eprintln!("dir check failure: {e}"),
-    }
-
-    let mut args = std::env::args();
-    let _ = args.next(); // skip executable name
-    if let Some(arg) = args.next() {
-        if arg == "--debugger" {
-            return debugger::debugger_main(args);
-        } else if arg == "--version" {
-            return;
-        } else {
-            panic!("unknown argument {arg:?}");
-        }
-    }
-
-    let mut engine = Engine::new();
-    jrpc_io::run_until_stdin_eof(|message| engine.handle_input(message));
-    engine.exit(0);
+    DmLangserverCli::parse().run()
 }
 
-const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
+// mimalloc is faster for parsing, but holds on to freed pages until we collect.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+/// Return freed memory from this thread (and exited ones)'s heap.
+// `force` is needed, otherwise freeing is deferred until the thread allocs again, which doesn't happen on idle
+fn collect_freed_memory() {
+    // SAFETY: mi_collect is a ffi call, no safety contract
+    #[allow(unsafe_code)]
+    unsafe {
+        libmimalloc_sys::mi_collect(true);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// CLI driver
+
+const NAME: &str = "dm-langserver";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const GPL: &str = "This program comes with ABSOLUTELY NO WARRANTY. This is free software,
+and you are welcome to redistribute it under the conditions of the GNU
+General Public License version 3.";
+
+fn long_version() -> String {
+    let build_info = include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"));
+    let extools = cfg_select! {
+        extools_bundle => concat!("extools commit: ", env!("BUNDLE_VERSION_extools.dll"), "\n"),
+        _ => ""
+    };
+    let auxtools = cfg_select! {
+        auxtools_bundle => concat!("auxtools commit: ", env!("BUNDLE_VERSION_debug_server.dll"), "\n"),
+        _ => ""
+    };
+    let exe = match std::env::current_exe() {
+        Ok(path) => format!("executable: {}", path.display()),
+        Err(e) => format!("exe check failure: {e}"),
+    };
+    let dir = match std::env::current_dir() {
+        Ok(path) => format!("directory: {}", path.display()),
+        Err(e) => format!("dir check failure: {e}"),
+    };
+    format!(
+        "{VERSION}  Copyright (C) 2017-2026  Tad Hardesty\n{GPL}\n\n{build_info}\n{extools}{auxtools}{exe}\n{dir}"
+    )
+}
+
+#[derive(clap::Parser, Debug)]
+#[command(
+    name=NAME,
+    version=VERSION,
+    long_version=long_version(),
+)]
+struct DmLangserverCli {
+    #[clap(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    #[clap(name = "--debugger")]
+    Debugger(debugger::DebuggerCli),
+}
+
+impl DmLangserverCli {
+    fn run(&self) {
+        eprintln!("{} {}", NAME, long_version());
+        match &self.command {
+            Some(Command::Debugger(args)) => debugger::debugger_main(args),
+            None => {
+                let mut engine = Engine::new();
+                jrpc_io::run_until_stdin_eof(|message| engine.handle_input(message));
+                engine.exit(0);
+            },
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Language server
+
+const JSONRPC_VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
 
 #[derive(PartialEq)]
 enum InitStatus {
@@ -601,6 +638,7 @@ impl Engine {
                 elapsed.subsec_millis()
             );
             print_thread_total();
+            collect_freed_memory();
             table
         });
 
@@ -635,6 +673,8 @@ impl Engine {
                 diagnostics_tracker.lock().unwrap().send(map);
 
                 issue_notification::<extras::WindowStatus>(Default::default());
+                drop(context);
+                collect_freed_memory();
             });
         } else {
             self.issue_notification::<extras::WindowStatus>(Default::default());
@@ -680,6 +720,9 @@ impl Engine {
 
         // Print the total time.
         print_thread_total();
+
+        // Parsing churns through a lot of short-lived allocations
+        collect_freed_memory();
 
         Ok(())
     }
@@ -1221,7 +1264,7 @@ impl Engine {
                 .flat_map(|call| self.handle_call(call))
                 .collect(),
             Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
-                jsonrpc: VERSION,
+                jsonrpc: JSONRPC_VERSION,
                 error: jsonrpc::Error {
                     code: jsonrpc::ErrorCode::ParseError,
                     message: decode_error.to_string(),
@@ -1242,13 +1285,13 @@ impl Engine {
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
         match call {
-            Call::Invalid { id } => Some(Output::invalid_request(id, VERSION)),
+            Call::Invalid { id } => Some(Output::invalid_request(id, JSONRPC_VERSION)),
             Call::MethodCall(method_call) => {
                 let id = method_call.id.clone();
                 Some(Output::from(
                     self.handle_method_call(method_call),
                     id,
-                    VERSION,
+                    JSONRPC_VERSION,
                 ))
             },
             Call::Notification(notification) => {
@@ -2672,7 +2715,7 @@ where
 {
     let params = serde_json::to_value(params).expect("notification bad to_value");
     let request = jsonrpc::Request::Single(Call::Notification(jsonrpc::Notification {
-        jsonrpc: VERSION,
+        jsonrpc: JSONRPC_VERSION,
         method: T::METHOD.to_owned(),
         params: value_to_params(params),
     }));

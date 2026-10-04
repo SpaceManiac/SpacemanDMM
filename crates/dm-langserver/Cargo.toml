@@ -21,6 +21,9 @@ libc = "0.2.161"
 regex = "1.11.1"
 lazy_static = "1.5"
 foldhash = "0.2.0"
+clap = { workspace = true, features = ["string"] }
+mimalloc.workspace = true
+libmimalloc-sys.workspace = true
 
 [build-dependencies]
 chrono.workspace = true

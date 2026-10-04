@@ -9,7 +9,7 @@ cd ..
 touch crates/dm-langserver/build.rs
 
 echo '==== Linux build ===='
-cargo build --release --target x86_64-unknown-linux-musl -p dm-langserver
+tools/manylinux/container cargo build --release --target x86_64-unknown-linux-gnu -p dm-langserver
 
 echo '==== Windows build ===='
 cargo build --release --target x86_64-pc-windows-gnu -p dm-langserver
@@ -20,7 +20,7 @@ echo '==== Organize files ===='
 DEST=target/langserver-dist
 rm -rf "$DEST"
 mkdir -p "$DEST"
-cp target/x86_64-unknown-linux-musl/release/dm-langserver "$DEST/x64-linux"
+cp target/x86_64-unknown-linux-gnu/release/dm-langserver "$DEST/x64-linux"
 cp target/x86_64-pc-windows-gnu/release/dm-langserver.exe "$DEST/x64-win32.exe"
 strip "$DEST/x64-linux"
 x86_64-w64-mingw32-strip "$DEST/x64-win32.exe"

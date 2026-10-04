@@ -11,7 +11,7 @@ name = "dmm-tools"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.5.20", features = ["derive"] }
+clap.workspace = true
 serde = "1.0.213"
 serde_derive = "1.0.213"
 serde_json = "1.0.132"
@@ -19,6 +19,7 @@ rayon = "1.10.0"
 dreammaker = { path = "../dreammaker" }
 dmm-tools = { path = "../dmm-tools", features = ["png"] }
 foldhash = "0.2.0"
+mimalloc.workspace = true
 
 [build-dependencies]
 chrono.workspace = true
