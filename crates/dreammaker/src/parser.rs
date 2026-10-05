@@ -336,6 +336,8 @@ pub struct Parser<'ctx, 'an, 'inp> {
     procs: bool,
     procs_bad: u64,
     procs_good: u64,
+    proc_body_enter: fn(),
+    proc_body_exit: fn(),
 }
 
 impl<'ctx, 'an, 'inp> HasLocation for Parser<'ctx, 'an, 'inp> {
@@ -385,11 +387,19 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             procs: false,
             procs_bad: 0,
             procs_good: 0,
+            proc_body_enter: || {},
+            proc_body_exit: || {},
         }
     }
 
     pub fn enable_procs(&mut self) {
         self.procs = true;
+    }
+
+    /// Run `enter` before and `exit` after parsing each proc body so we can keep proc bodies in their own heap.
+    pub fn set_proc_body_scope(&mut self, enter: fn(), exit: fn()) {
+        self.proc_body_enter = enter;
+        self.proc_body_exit = exit;
     }
 
     pub fn annotate_to(&mut self, annotations: &'an mut AnnotationTree) {
@@ -1270,6 +1280,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
 
         let code = if self.procs {
+            (self.proc_body_enter)();
+            let outer_errors = std::mem::take(&mut *self.context.errors_mut());
             let result = {
                 let mut subparser: Parser<'ctx, '_, '_> = Parser::new(self.context, body_tt);
                 if let Some(a) = self.annotations.as_mut() {
@@ -1283,13 +1295,20 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             } else {
                 self.procs_bad += 1;
             }
-            match result {
+            let code = match result {
                 Err(err) => {
                     self.context.register_error(err);
                     None
                 },
                 Ok(code) => Some(code),
-            }
+            };
+            (self.proc_body_exit)();
+            // errors outlive the proc body, so copy them out of its scope
+            let body_errors = std::mem::replace(&mut *self.context.errors_mut(), outer_errors);
+            self.context
+                .errors_mut()
+                .extend(body_errors.iter().cloned());
+            code
         } else {
             None
         };

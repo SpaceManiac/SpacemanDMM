@@ -3,6 +3,7 @@
 //! JSON-RPC over stdin/stdout with Content-Length headers.
 
 use std::io::{self, BufRead, Write};
+use std::sync::mpsc;
 
 pub fn run_until_stdin_eof<F: FnMut(&str)>(mut f: F) {
     let stdin = io::stdin();
@@ -10,6 +11,31 @@ pub fn run_until_stdin_eof<F: FnMut(&str)>(mut f: F) {
     while let Some(message) = read(&mut stdin).expect("JSON-RPC read error") {
         f(&message);
     }
+}
+
+pub enum Event {
+    /// A message from stdin, or `None` at EOF.
+    Read(Result<Option<String>, String>),
+    /// A background job finished.
+    JobFinished,
+}
+
+/// Read stdin on its own thread, so background threads can also send events.
+pub fn stdin_events() -> (mpsc::Sender<Event>, mpsc::Receiver<Event>) {
+    let (tx, rx) = mpsc::channel();
+    let reader_tx = tx.clone();
+    std::thread::spawn(move || {
+        let mut stdin = io::stdin().lock();
+        loop {
+            let read = read(&mut stdin).map_err(|error| error.to_string());
+            let done = !matches!(read, Ok(Some(_)));
+            let _ = reader_tx.send(Event::Read(read));
+            if done {
+                break;
+            }
+        }
+    });
+    (tx, rx)
 }
 
 pub fn run_with_read<R: BufRead, F: FnMut(&str)>(input: &mut R, mut f: F) {

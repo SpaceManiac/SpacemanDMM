@@ -26,7 +26,7 @@ use std::collections::VecDeque;
 use std::collections::hash_map::Entry;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
 use clap::Parser;
 use dm::annotation::{Annotation, AnnotationTree};
@@ -48,6 +48,7 @@ mod document;
 mod extras;
 mod find_references;
 mod jrpc_io;
+mod proc_heap;
 mod symbol_search;
 
 use extras::{QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
@@ -131,8 +132,17 @@ impl DmLangserverCli {
         match &self.command {
             Some(Command::Debugger(args)) => debugger::debugger_main(args),
             None => {
-                let mut engine = Engine::new();
-                jrpc_io::run_until_stdin_eof(|message| engine.handle_input(message));
+                let (events_tx, events) = jrpc_io::stdin_events();
+                let mut engine = Engine::new(events_tx);
+                for event in events {
+                    match event {
+                        jrpc_io::Event::Read(read) => match read.expect("JSON-RPC read error") {
+                            Some(message) => engine.handle_input(&message),
+                            None => break,
+                        },
+                        jrpc_io::Event::JobFinished => engine.release_proc_bodies(),
+                    }
+                }
                 engine.exit(0);
             },
         }
@@ -316,6 +326,8 @@ struct Engine {
     context: dm::Context,
     defines: Option<dm::preprocessor::DefineHistory>,
     objtree: Arc<dm::objtree::ObjectTree>,
+    /// Lets background jobs tell the main loop when they finish.
+    events_tx: mpsc::Sender<jrpc_io::Event>,
     references_table: background::Background<find_references::ReferencesTable>,
 
     annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>)>,
@@ -327,7 +339,7 @@ struct Engine {
 }
 
 impl Engine {
-    fn new() -> Self {
+    fn new(events_tx: mpsc::Sender<jrpc_io::Event>) -> Self {
         Engine {
             docs: Default::default(),
 
@@ -340,6 +352,7 @@ impl Engine {
             context: dm::Context::default(),
             defines: None,
             objtree: Default::default(),
+            events_tx,
             references_table: Default::default(),
 
             annotations: Default::default(),
@@ -608,6 +621,7 @@ impl Engine {
         {
             let mut parser = dm::Parser::new(&self.context, &mut pp);
             parser.enable_procs();
+            parser.set_proc_body_scope(proc_heap::enter, proc_heap::exit);
             let (fatal_errored_2, objtree) = parser.parse_object_tree_2();
             fatal_errored = fatal_errored_2;
             self.objtree = Arc::new(objtree);
@@ -628,6 +642,7 @@ impl Engine {
 
         // Background thread: prepare the Find All References database.
         let references_objtree = self.objtree.clone();
+        let events_tx = self.events_tx.clone();
         self.references_table.spawn(move || {
             let table = find_references::ReferencesTable::new(&references_objtree);
             let elapsed = start.elapsed();
@@ -637,7 +652,9 @@ impl Engine {
                 elapsed.subsec_millis()
             );
             print_thread_total();
+            drop(references_objtree);
             collect_freed_memory();
+            let _ = events_tx.send(jrpc_io::Event::JobFinished);
             table
         });
 
@@ -652,6 +669,7 @@ impl Engine {
             let root = self.root.clone();
             let related_info = self.client_caps.related_info;
             let diagnostics_tracker = self.diagnostics_tracker.clone();
+            let events_tx = self.events_tx.clone();
             std::thread::spawn(move || {
                 dreamchecker::run(&context, &objtree);
                 let elapsed = start.elapsed();
@@ -672,8 +690,9 @@ impl Engine {
                 diagnostics_tracker.lock().unwrap().send(map);
 
                 issue_notification::<extras::WindowStatus>(Default::default());
-                drop(context);
+                drop((context, objtree));
                 collect_freed_memory();
+                let _ = events_tx.send(jrpc_io::Event::JobFinished);
             });
         } else {
             self.issue_notification::<extras::WindowStatus>(Default::default());
@@ -712,10 +731,6 @@ impl Engine {
                 elapsed.subsec_millis()
             );
         }
-
-        /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
-            objtree.drop_code();
-        }*/
 
         // Print the total time.
         print_thread_total();
@@ -1280,6 +1295,16 @@ impl Engine {
         };
 
         jrpc_io::write(&serde_json::to_string(&response).expect("response bad to_string"));
+    }
+
+    /// Drop proc bodies once the background jobs are done with them.
+    fn release_proc_bodies(&mut self) {
+        if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
+            objtree.drop_code();
+            proc_heap::collect();
+            // the heaps share segments, so the main heap needs collecting too
+            collect_freed_memory();
+        }
     }
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
