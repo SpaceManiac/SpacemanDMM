@@ -449,6 +449,7 @@ dependencies = [
  "sha256",
  "ureq",
  "url",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

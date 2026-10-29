@@ -131,12 +131,46 @@ impl DmLangserverCli {
         match &self.command {
             Some(Command::Debugger(args)) => debugger::debugger_main(args),
             None => {
+                #[cfg(windows)]
+                if let Err(err) = disable_power_throttling() {
+                    eprintln!("couldn't disable power throttling: {err}");
+                }
                 let mut engine = Engine::new();
                 jrpc_io::run_until_stdin_eof(|message| engine.handle_input(message));
                 engine.exit(0);
             },
         }
     }
+}
+
+/// Windows 11 lowers the QoS of a busy process that has no window of its own
+/// For example, a langserver that holds program state in the background.
+#[cfg(windows)]
+fn disable_power_throttling() -> std::io::Result<()> {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE,
+        ProcessPowerThrottling, SetProcessInformation,
+    };
+    let state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        StateMask: 0, // turn it off
+    };
+    // SAFETY: We pass the PROCESS_POWER_THROTTLING_STATE we just created and its size.
+    #[allow(unsafe_code)]
+    let ok = unsafe {
+        SetProcessInformation(
+            GetCurrentProcess(),
+            ProcessPowerThrottling,
+            (&raw const state).cast(),
+            size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+        )
+    };
+    if ok == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 // ----------------------------------------------------------------------------
