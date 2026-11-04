@@ -49,3 +49,19 @@ fn return_type() {
         (3, 16, "undefined proc: \"foo\" on /atom"),
     ]);
 }
+
+#[test]
+fn matrix_proc_return_type() {
+    let code = r##"
+/atom/proc/test()
+    transform.Translate(1, 1).Scale(3, 3)
+    var/matrix/m = matrix()
+    m.Multiply(m).Add(m).Subtract(m).Invert().Turn(45).Scale(3, 3).Translate(1, 1).Interpolate(m, 0.5).Invert()
+    m.Translate(1, 1).foo()
+"##
+    .trim();
+    #[rustfmt::skip]
+    check_errors_match(code, &[
+        (5, 22, "undefined proc: \"foo\" on /matrix"),
+    ]);
+}
