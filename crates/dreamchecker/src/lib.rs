@@ -683,6 +683,22 @@ impl<'o> AnalyzeObjectTree<'o> {
             objtree.root().get_proc("get_step").unwrap(),
             StaticType::Type(objtree.expect("/turf")).into(),
         );
+        let matrix = objtree.expect("/matrix");
+        for name in [
+            "Multiply",
+            "Add",
+            "Subtract",
+            "Invert",
+            "Turn",
+            "Scale",
+            "Translate",
+            "Interpolate",
+        ] {
+            return_type.insert(
+                matrix.get_proc(name).unwrap(),
+                StaticType::Type(matrix).into(),
+            );
+        }
 
         AnalyzeObjectTree {
             context,
