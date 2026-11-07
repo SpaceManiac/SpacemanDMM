@@ -32,6 +32,23 @@ fn try_another<T>() -> Status<T> {
 
 const SUCCESS: Status<()> = Ok(Some(()));
 
+/// One alternative in a "got X, expected one of: ..." error.
+/// We only format when the error happens since alternatives are recorded for every token.
+#[derive(PartialEq, Eq, Hash)]
+enum Expected {
+    Text(Cow<'static, str>),
+    Keyword(Ident),
+}
+
+impl std::fmt::Display for Expected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expected::Text(text) => f.write_str(text),
+            Expected::Keyword(ident) => write!(f, "`{ident}`"),
+        }
+    }
+}
+
 macro_rules! require {
     ($self:ident.$($rest:tt)*) => {{
         let v = $self.$($rest)*;
@@ -327,7 +344,7 @@ pub struct Parser<'ctx, 'an, 'inp> {
     /// Lookahead buffer. Usually one token, sometimes two in error handling.
     next: VecDeque<LocatedToken>,
     location: Location,
-    expected: Vec<Cow<'static, str>>,
+    expected: Vec<Expected>,
     skipping_location: Option<Location>,
 
     doc_comments_pending: VecDeque<(Location, DocComment)>,
@@ -460,7 +477,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     // Call this to get a DMError in the event of an entry point returning None
     fn parse_error(&mut self) -> DMError {
-        let expected = self.expected.join(", ");
+        let expected = self
+            .expected
+            .iter()
+            .collect::<indexmap::IndexSet<_>>() // Deduplicate
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
         if self.eof {
             let mut error = self.error(format!("got EOF, expected one of: {expected}"));
             if let Some(loc) = self.skipping_location {
@@ -494,8 +518,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     /// Push an alternative to the "got X, expected one of: ..." list.
     fn expected(&mut self, expected: impl Into<Cow<'static, str>>) {
         let expected = expected.into();
-        if !expected.is_empty() && !self.expected.contains(&expected) {
-            self.expected.push(expected);
+        if !expected.is_empty() {
+            // Deduped when the error is reported
+            self.expected.push(Expected::Text(expected));
         }
     }
 
@@ -644,7 +669,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn exact_ident(&mut self, ident: Ident) -> Status<()> {
-        self.expected(format!("`{ident}`"));
+        self.expected.push(Expected::Keyword(ident.clone()));
         take_match!(self {
             Token::Ident(i, _) if *i == ident => SUCCESS,
         } else try_another())
