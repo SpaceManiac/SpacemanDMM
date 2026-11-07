@@ -5,7 +5,7 @@ use rusqlite::{Connection, OptionalExtension, named_params};
 
 use crate::{ABBREV, format_git_time};
 
-const SCHEMA: &'static str = r#"
+const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS "spaceman_rev" (
 	"spaceman_rev"	TEXT NOT NULL,
 	"date"	TEXT NOT NULL,
@@ -58,7 +58,7 @@ pub struct Db(Connection);
 
 impl Db {
     pub fn open(root: &Path) -> Self {
-        let conn = Connection::open(&root.join("zoo.db")).unwrap();
+        let conn = Connection::open(root.join("zoo.db")).unwrap();
         conn.execute_batch(SCHEMA).unwrap();
         Db(conn)
     }
@@ -109,7 +109,7 @@ impl Db {
             .as_object()
             .describe(&DescribeOptions::new())?
             .format(Some(
-                &DescribeFormatOptions::new().abbreviated_size(ABBREV as u32),
+                DescribeFormatOptions::new().abbreviated_size(ABBREV as u32),
             ))?;
         self.insert_spaceman_rev(&spaceman_rev, &date, &describe)?;
         Ok(spaceman_rev)

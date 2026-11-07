@@ -273,9 +273,13 @@ struct Panic {
 impl Panic {
     fn new(e: &(dyn std::any::Any + Send + 'static)) -> Self {
         if let Some(panic) = e.downcast_ref::<&str>() {
-            Panic { panic: panic.to_string() }
+            Panic {
+                panic: panic.to_string(),
+            }
         } else if let Some(panic) = e.downcast_ref::<String>() {
-            Panic { panic: panic.to_string() }
+            Panic {
+                panic: panic.to_string(),
+            }
         } else {
             panic!("couldn't get panic message")
         }
@@ -356,13 +360,12 @@ fn with_max_date<'repo>(commit: &Commit<'repo>, max_date: &str) -> Commit<'repo>
             }
         }
 
-        if format_git_time(current.time()).as_str() < max_date {
-            if best
+        if format_git_time(current.time()).as_str() < max_date
+            && best
                 .as_ref()
                 .is_none_or(|best| current.time() > best.time())
-            {
-                best = Some(current);
-            }
+        {
+            best = Some(current);
         }
     }
     best.unwrap_or(commit.clone())
