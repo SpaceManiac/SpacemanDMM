@@ -12,6 +12,7 @@ members = [
     "crates/dreammaker-macros",
     "crates/interval-tree",
     #"crates/spaceman-dmm",
+    "crates/zoo",
 ]
 
 [workspace.package]
@@ -26,6 +27,7 @@ clap = { version = "4.5.20", features = ["derive"] }
 git2 = { version = "0.21.0", default-features = false }
 mimalloc = { version = "0.1.52", features = ["v2"] }
 libmimalloc-sys = { version = "0.1.49", features = ["extended", "v2"] }
+toml = { version = "1.1.4", features = ["fast_hash"] }
 
 [profile.dev]
 opt-level = 1
