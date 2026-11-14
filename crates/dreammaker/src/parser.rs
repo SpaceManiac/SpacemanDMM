@@ -858,7 +858,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 .filter(|&c| c == '/')
                 .count()
                 + path_len;
-            *current = self.tree.subtype_or_add(self.location, *current, each, len);
+            *current = self.tree.subtype_or_add(self.location, *current, each, len, Some(self.context));
 
             if !absolute
                 && self
@@ -1146,7 +1146,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         + path_len;
                     current = self
                         .tree
-                        .subtype_or_add(self.location, current, last_part, len);
+                        .subtype_or_add(self.location, current, last_part, len, Some(self.context));
                     self.tree.extend_docs(current, docs);
                 }
 
