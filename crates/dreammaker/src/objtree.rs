@@ -1060,7 +1060,7 @@ impl ObjectTreeBuilder {
         parent: TypeIndex,
         child: &Ident,
         len: usize,
-        context: Option<&Context>
+        context: Option<&Context>,
     ) -> TypeIndex {
         if let Some(&target) = self.inner[parent].children.get(child) {
             let node = &mut self.inner[target];
@@ -1092,10 +1092,14 @@ impl ObjectTreeBuilder {
             .insert(Ident::from_nonstatic(child), node);
         self.inner.by_path.insert(path, node);
         if let Some(context) = context {
-            if self.inner[parent].procs.contains_key(child) && !self.inner[parent].procs[child].declaration.is_some() {
+            if self.inner[parent].procs.contains_key(child)
+                && !self.inner[parent].procs[child].declaration.is_some()
+            {
                 context.register_error(DMError::new(
                     location,
-                    format!("cannot subtype with the same identifier as a proc override: `{child}`"), // Only necessary until https://www.byond.com/forum/post/2992612 is resolved
+                    format!(
+                        "cannot subtype with the same identifier as a proc override: `{child}`"
+                    ), // Only necessary until https://www.byond.com/forum/post/2992612 is resolved
                 ));
             };
         };

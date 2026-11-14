@@ -62,7 +62,8 @@ fn empty_list_find_warns() {
 }
 
 #[test]
-fn proc_override_disambiguation_failure() { // Only necessary until https://www.byond.com/forum/post/2992612 is resolved
+fn proc_override_disambiguation_failure() {
+    // Only necessary until https://www.byond.com/forum/post/2992612 is resolved
     let code = r##"
 /datum/proc/test()
     return
