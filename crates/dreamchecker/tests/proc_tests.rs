@@ -60,3 +60,29 @@ fn empty_list_find_warns() {
         (3, 20, "list.Find() with no arguments searches for null, write Find(null) if that is intended"),
     ]);
 }
+
+#[test]
+fn proc_override_disambiguation_failure() {
+    // Only necessary until https://www.byond.com/forum/post/2992612 is resolved
+    let code = r##"
+/datum/proc/test()
+    return
+
+/datum/subtype/test()
+    return
+
+/datum/subtype/test // Byond can't disambiguate this
+
+/datum/test // Allowed because byond can disambiguate the /proc/
+
+/datum/subtype/some_other/test() // Allowed because its just a normal proc override
+    return
+
+/datum/subtype/some_deeper/test // Allowed because byond can disambiguate something deeper
+"##
+    .trim();
+    #[rustfmt::skip]
+    check_errors_match(code, &[
+        (7, 53, "cannot subtype with the same identifier as a proc override: `test`"),
+    ]);
+}
