@@ -160,14 +160,20 @@ impl Context {
     ///
     /// Returns the path to the `.dme` to use.
     pub fn configure_from_dme(&mut self, dme: &Path) -> PathBuf {
-        if let Some(parent) = dme.parent() {
-            _ = self.configure_from_directory(parent);
-        }
-        // Always override `config.environment`.
-        self.config
+        // Set config.environment before running update_config_from_toml.
+        let new_environment = self
+            .config
             .environment
-            .insert(dme.strip_prefix(".").unwrap_or(dme).to_owned())
-            .to_owned()
+            .insert(dme.strip_prefix(".").unwrap_or(dme).to_owned());
+        if let Some(parent) = dme.parent() {
+            let toml = parent.join("SpacemanDMM.toml");
+            if toml.exists() {
+                return self
+                    .update_config_from_toml(&toml)
+                    .expect("toml exists but is invalid");
+            }
+        }
+        new_environment.to_path_buf()
     }
 
     /// Search for `SpacemanDMM.toml` within the given directory, defaulting
@@ -195,12 +201,12 @@ impl Context {
             Ok(config) => self.config = config,
             Err(err) => err.register(self),
         }
-        if let Some(parent) = toml.parent() {
-            self.detect_environment(parent)
-        } else {
-            match self.config.environment.clone() {
-                Some(env) => Ok(env),
-                None => {
+        match self.config.environment.clone() {
+            Some(env) => Ok(env),
+            None => {
+                if let Some(parent) = toml.parent() {
+                    self.detect_environment(parent)
+                } else {
                     // Rare weird situation
                     Err(DMError::new(
                         Location {
@@ -210,8 +216,42 @@ impl Context {
                         },
                         "no .dme file detected: no `environment` set and no parent directory to search",
                     ))
-                },
-            }
+                }
+            },
+        }
+    }
+
+    /// Load the given `.toml`, merging it into the existing config.
+    ///
+    /// Returns the path to the `.dme` to use.
+    pub fn update_config_from_toml(&mut self, toml: &Path) -> Result<PathBuf, DMError> {
+        let file = self.register_file(toml);
+        match Config::read_toml(file, toml) {
+            Ok(mut config) => {
+                // Right now environment is the only thing we merge from the original config
+                // take is safe here because we discard the original config anyway
+                config.environment = self.config.environment.take().or(config.environment);
+                self.config = config;
+            },
+            Err(err) => err.register(self),
+        }
+        match self.config.environment.clone() {
+            Some(env) => Ok(env),
+            None => {
+                if let Some(parent) = toml.parent() {
+                    self.detect_environment(parent)
+                } else {
+                    // Rare weird situation
+                    Err(DMError::new(
+                        Location {
+                            file,
+                            line: 1,
+                            column: 1,
+                        },
+                        "no .dme file detected: no `environment` set and no parent directory to search",
+                    ))
+                }
+            },
         }
     }
 
