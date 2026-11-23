@@ -160,14 +160,15 @@ impl Context {
     ///
     /// Returns the path to the `.dme` to use.
     pub fn configure_from_dme(&mut self, dme: &Path) -> PathBuf {
+        // Set environment upfront.
+        let env = dme.strip_prefix(".").unwrap_or(dme).to_owned();
+        self.config.environment = Some(env.clone());
+        // Load adjacent `SpacemanDMM.toml` if present.
         if let Some(parent) = dme.parent() {
             _ = self.configure_from_directory(parent);
         }
         // Always override `config.environment`.
-        self.config
-            .environment
-            .insert(dme.strip_prefix(".").unwrap_or(dme).to_owned())
-            .to_owned()
+        self.config.environment.insert(env).clone()
     }
 
     /// Search for `SpacemanDMM.toml` within the given directory, defaulting
@@ -192,7 +193,13 @@ impl Context {
     pub fn configure_from_toml(&mut self, toml: &Path) -> Result<PathBuf, DMError> {
         let file = self.register_file(toml);
         match Config::read_toml(file, toml) {
-            Ok(config) => self.config = config,
+            Ok(config) => {
+                // Override .toml file's `environment` with already-configured
+                // environment if set by `configure_from_dme` above.
+                let env = self.config.environment.take();
+                self.config = config;
+                self.config.environment = env.or(self.config.environment.take());
+            },
             Err(err) => err.register(self),
         }
         if let Some(parent) = toml.parent() {
