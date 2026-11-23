@@ -66,7 +66,7 @@ impl DreamCheckerCli {
         let errors = context
             .errors()
             .iter()
-            .filter(|each| each.severity() <= dm::Severity::Info)
+            .filter(|each| each.severity() <= dm::Severity::Warning)
             .count();
         println!("Found {errors} diagnostics");
 
