@@ -113,3 +113,12 @@ pub struct StartDebuggerParams {
 pub struct StartDebuggerResult {
     pub port: u16,
 }
+
+// ----------------------------------------------------------------------------
+// ExpandMacros
+pub enum ExpandMacros {}
+impl Request for ExpandMacros {
+    const METHOD: &'static str = "experimental/dreammaker/expandMacros";
+    type Params = lsp_types::TextDocumentIdentifier;
+    type Result = String;
+}
